@@ -1,0 +1,33 @@
+# Core Framework
+streamlit>=1.28.0
+# Computer Vision
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+scipy>=1.10.0
+scikit-image>=0.21.0
+Pillow>=10.0.0
+# Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.200
+# OCR
+rapidocr_onnxruntime>=1.2.0
+onnxruntime>=1.15.0
+easyocr>=1.7.0
+# QR / Barcode
+pyzbar>=0.1.9
+qrcode[pil]>=8.0
+# Data Processing
+pandas>=2.0.0
+openpyxl>=3.1.0
+# Database
+# sqlite3 is built-in
+# Plotting
+plotly>=5.15.0
+matplotlib>=3.7.0
+# Utilities
+python-dotenv>=1.0.0
+PyYAML>=6.0
+chardet>=5.0.0
+# Testing
+pytest>=7.4.0

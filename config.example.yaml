@@ -1,0 +1,30 @@
+# Steel Billet Inspection - Example Configuration
+# Copy to config.yaml and customise for your plant
+
+billet_profiles:
+  "Custom 800x160x160mm":
+    nominal_length_mm: 800.0
+    nominal_width_mm: 160.0
+    nominal_height_mm: 160.0
+    length_tolerance_mm: 8.0
+    width_tolerance_mm: 3.0
+    height_tolerance_mm: 3.0
+    cross_section: square
+    defect_rule: FAIL
+    required_fields:
+      - billet_id
+    description: "Custom square billet 800x160x160"
+
+  "Round Billet 120mm":
+    nominal_length_mm: 1000.0
+    nominal_width_mm: 120.0
+    nominal_height_mm: 120.0
+    length_tolerance_mm: 10.0
+    width_tolerance_mm: 2.5
+    height_tolerance_mm: 2.5
+    cross_section: round
+    defect_rule: REWORK
+    required_fields:
+      - billet_id
+      - heat_number
+    description: "Round billet 120mm diameter"
