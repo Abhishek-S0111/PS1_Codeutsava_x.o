@@ -2,7 +2,7 @@
 
 **CodeUtsava X.0 — Team INIT**
 
-AI-powered automated inspection system for steel manufacturing. Detects defects, reads billet IDs, measures dimensions, and maintains complete traceability records — 100% offline-capable.
+AI-powered automated inspection system for steel manufacturing. Detects defects, reads billet IDs, and maintains complete traceability records — 100% offline-capable.
 
 ---
 
@@ -12,7 +12,6 @@ AI-powered automated inspection system for steel manufacturing. Detects defects,
 |---|---|
 | 📹 **Video/Image Processing** | Upload factory videos, process frame-by-frame with YOLO detection |
 | 🔍 **Defect Detection** | Surface defect detection with confidence scoring and patch-based analysis |
-| 📏 **Dimensional Measurement** | Calibrated pixel-to-physical conversion with tolerance checking |
 | 🔤 **OCR Extraction** | Read laser-etched, stamped, painted markings; QR/barcode decoding |
 | ⚖️ **Decision Engine** | PASS / FAIL / REVIEW / UNVERIFIED / REWORK with transparent rules |
 | 📊 **Dashboard** | Real-time KPIs, trend charts, defect summary, alerts |
@@ -83,21 +82,6 @@ python training/generate_synthetic_data.py
 
 ---
 
-## 📐 Calibration
-
-Physical measurements require camera calibration:
-
-1. Go to **Calibration** page
-2. Choose a method:
-   - **Reference Object** — upload image with known dimension, click two points
-   - **Checkerboard** — upload 5+ checkerboard images
-   - **Manual** — enter known pixels-per-mm value
-3. Calibration is valid for 30 days
-
-⚠️ Without calibration, dimensions are shown in pixels only and dimensional PASS cannot be issued.
-
----
-
 ## 📂 Project Structure
 
 ```
@@ -106,7 +90,6 @@ steel-billet-inspection/
 ├── pages/                          # UI pages
 │   ├── dashboard.py                # KPI dashboard
 │   ├── upload_process.py           # Video/image upload & processing
-│   ├── calibration.py              # Camera calibration & OCR test
 │   ├── history_analysis.py         # Search, filter, export, trends
 │   ├── chatbot_page.py             # AI chatbot interface
 │   └── settings.py                 # Profiles, models, system info
@@ -114,8 +97,6 @@ steel-billet-inspection/
 │   └── detection.py                # Billet detection & tracking
 ├── defects/                        # Defect analysis
 │   └── defect_detection.py         # YOLO + fallback defect detector
-├── measurement/                    # Dimensional measurement
-│   └── calibration.py              # Calibration & tolerance checking
 ├── ocr_module/                     # OCR & barcode
 │   └── ocr_extraction.py           # EasyOCR/Tesseract, QR, barcode
 ├── rules/                          # Quality decisions
@@ -192,7 +173,6 @@ Copy `models/defect_detector.pt` and restart the app.
 | `EasyOCR not available` | `pip install easyocr` |
 | `ModuleNotFoundError: ultralytics` | `pip install ultralytics` |
 | Slow processing | Increase frame skip, reduce resolution |
-| No physical measurements | Calibrate the camera first |
 | Excel locked | Records are safe in SQLite; export retries as CSV |
 
 ---

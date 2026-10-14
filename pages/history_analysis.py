@@ -1,6 +1,6 @@
 """
 History & Analysis Page — Search, filter, inspect, and export historical quality & traceability records.
-Displays dimensional drift in cm, heat-by-heat quality distributions, and Excel exports.
+Displays defect compliance, heat-by-heat quality distributions, and Excel exports.
 """
 import streamlit as st
 import pandas as pd
@@ -15,7 +15,7 @@ from utils.config import THEME, OUTPUT_DIR, EVIDENCE_DIR
 def render_history():
     st.markdown('<div class="page-title">📊 Quality History &amp; Traceability Archive</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="page-subtitle">Search, filter, analyze dimensional compliance in cm, and export Excel QC certificates</div>',
+        '<div class="page-subtitle">Search, filter, analyze defect QC &amp; traceability, and export Excel QC certificates</div>',
         unsafe_allow_html=True,
     )
 
@@ -62,13 +62,13 @@ def render_history():
         st.info("No records match the current filter selection.")
         return
 
-    # ── Data Table with CM Dimensions & Traceability ──────────────
+    # ── Data Table with Traceability & Defect Status ──────────────
     df = db.export_to_dataframe(**{k: v for k, v in params.items() if k != "limit"})
 
     # Priority visible columns
     preferred_cols = [
-        "Billet Number", "Heat Number", "Inspection Status", "Dimensions (cm)",
-        "Length (cm)", "Width (cm)", "Height (cm)", "Defect Detected", "Defect Type",
+        "Billet Number", "Heat Number", "Inspection Status",
+        "Defect Detected", "Defect Type", "Defect Count",
         "Timestamp", "Source File"
     ]
     show_cols = [c for c in preferred_cols if c in df.columns]
@@ -121,7 +121,7 @@ def render_history():
 
     # ── Trend Analysis Charts ─────────────────────────────────────
     st.markdown("---")
-    st.markdown("### 📈 Quality Compliance &amp; Dimensional Trends")
+    st.markdown("### 📈 Quality Compliance &amp; Defect Analysis")
 
     tcol1, tcol2 = st.columns(2)
 
@@ -161,32 +161,29 @@ def render_history():
                 st.plotly_chart(fig, use_container_width=True)
 
     with tcol2:
-        # Dimensional Drift in CM
-        if "Length (cm)" in df.columns:
-            meas_df = df[df["Length (cm)"].notna()].copy()
-            if len(meas_df) >= 2:
-                fig2 = go.Figure()
-                fig2.add_trace(go.Scatter(
-                    x=meas_df["Timestamp"],
-                    y=meas_df["Length (cm)"],
-                    mode="lines+markers",
-                    name="Measured Length (cm)",
-                    line=dict(color="#1E40AF", width=2.5),
-                    marker=dict(size=6),
+        # Defect Distribution
+        if "Defect Type" in df.columns:
+            def_counts = df[df["Defect Type"] != "None"]["Defect Type"].value_counts().reset_index()
+            def_counts.columns = ["Defect Type", "Count"]
+            if not def_counts.empty:
+                fig2 = go.Figure(go.Bar(
+                    x=def_counts["Defect Type"],
+                    y=def_counts["Count"],
+                    marker_color="#DC2626",
                 ))
                 fig2.update_layout(
-                    title="Length Variation Trend (cm)",
+                    title="Defect Distribution by Type",
                     plot_bgcolor="#FFFFFF",
                     paper_bgcolor="#FFFFFF",
                     font_color="#334155",
                     height=300,
                     margin=dict(l=20, r=20, t=35, b=25),
                     xaxis=dict(showgrid=False, linecolor="#CBD5E1"),
-                    yaxis=dict(showgrid=True, gridcolor="#F1F5F9", linecolor="#CBD5E1", title="Length (cm)"),
+                    yaxis=dict(showgrid=True, gridcolor="#F1F5F9", linecolor="#CBD5E1", title="Occurrences"),
                 )
                 st.plotly_chart(fig2, use_container_width=True)
             else:
-                st.info("Additional dimensional data points needed for drift chart.")
+                st.info("No defects identified in the filtered inspection set.")
 
     # ── Detailed Record Inspection ────────────────────────────────
     st.markdown("---")
@@ -204,21 +201,12 @@ def render_history():
 
         with dc1:
             st.markdown("##### 🏷️ Identification & Traceability")
-            l_mm = rec.get("measured_length_mm")
-            w_mm = rec.get("measured_width_mm")
-            h_mm = rec.get("measured_height_mm")
-            l_cm = f"{l_mm/10.0:.1f} cm" if l_mm is not None else "—"
-            w_cm = f"{w_mm/10.0:.1f} cm" if w_mm is not None else "—"
-            h_cm = f"{h_mm/10.0:.1f} cm" if h_mm is not None else "—"
-
             st.write(f"- **Billet Number / ID:** `{rec.get('billet_id', '—')}`")
             st.write(f"- **Heat Number:** `{rec.get('heat_number', '—')}`")
             st.write(f"- **Batch Number:** `{rec.get('batch_number', '—')}`")
             st.write(f"- **QC Status:** `{rec.get('inspection_status', '—')}`")
-            st.write(f"- **Physical Dimensions (cm):** `{l_cm} x {w_cm} x {h_cm}`")
-            st.write(f"- **Length:** `{l_cm}` ({l_mm:.1f} mm)" if l_mm else "- **Length:** —")
-            st.write(f"- **Width:** `{w_cm}` ({w_mm:.1f} mm)" if w_mm else "- **Width:** —")
-            st.write(f"- **Height:** `{h_cm}` ({h_mm:.1f} mm)" if h_mm else "- **Height:** —")
+            st.write(f"- **Defect Detected:** `{'Yes' if rec.get('defect_detected') else 'No'}`")
+            st.write(f"- **Defect Type:** `{(rec.get('defect_type') or 'None').replace('_', ' ').title()}`")
             st.write(f"- **Timestamp:** `{rec.get('timestamp', '—')}`")
             st.write(f"- **Source:** `{rec.get('source_file', '—')}`")
 

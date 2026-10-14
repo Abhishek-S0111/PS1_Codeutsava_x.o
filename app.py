@@ -227,7 +227,6 @@ def render_sidebar():
         pages = {
             "🏠 Dashboard": "dashboard",
             "📹 Upload & Process": "upload",
-            "🔬 Calibration": "calibration",
             "📊 History & Analysis": "history",
             "🤖 AI Chatbot": "chatbot",
             "⚙️ Settings": "settings",
@@ -261,9 +260,6 @@ def main():
     elif page == "upload":
         from pages.upload_process import render_upload_process
         render_upload_process()
-    elif page == "calibration":
-        from pages.calibration import render_calibration
-        render_calibration()
     elif page == "history":
         from pages.history_analysis import render_history
         render_history()

@@ -1,6 +1,6 @@
 """
 Dashboard Page — Real-time inspection monitoring, executive KPIs, and analytics.
-Displays physical dimensional trends in cm, defect rates, and recent traceability logs.
+Displays defect rates, quality yield, and recent traceability logs.
 """
 import streamlit as st
 import plotly.graph_objects as go
@@ -16,7 +16,7 @@ from utils.config import THEME, DECISION_STATUSES
 def render_dashboard():
     st.markdown('<div class="page-title">📊 Executive Inspection Dashboard</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="page-subtitle">Real-time quality control, dimensional accuracy (cm), and Heat &amp; Billet traceability</div>',
+        '<div class="page-subtitle">Real-time quality control, defect detection, and Heat &amp; Billet traceability</div>',
         unsafe_allow_html=True,
     )
 
@@ -123,31 +123,18 @@ def render_dashboard():
     else:
         st.info("No surface defects recorded.")
 
-    # ── Recent Inspections Table with CM Dimensions & Dual ID ─────
-    st.markdown("#### 🕐 Recent Inspected Billets (with CM Dimensions & Traceability)")
+    # ── Recent Inspections Table with Traceability & Dual ID ─────
+    st.markdown("#### 🕐 Recent Inspected Billets (with Traceability & Quality Status)")
     recent = db.get_inspections(limit=12)
     if recent:
         rows = []
         for r in recent:
             status = r.get("inspection_status", "—")
-            l_mm = r.get("measured_length_mm")
-            w_mm = r.get("measured_width_mm")
-            h_mm = r.get("measured_height_mm")
-
-            l_cm = f"{l_mm/10.0:.1f} cm" if l_mm is not None else "—"
-            w_cm = f"{w_mm/10.0:.1f} cm" if w_mm is not None else "—"
-            h_cm = f"{h_mm/10.0:.1f} cm" if h_mm is not None else "—"
-            dim_cm = f"{l_cm} x {w_cm} x {h_cm}" if (l_mm and w_mm) else "—"
-
             rows.append({
                 "Timestamp": r.get("timestamp", "—")[:19],
                 "Billet Number": r.get("billet_id") or "—",
                 "Heat Number": r.get("heat_number") or "—",
                 "Status": status,
-                "Dimensions (cm)": dim_cm,
-                "Length (cm)": l_cm,
-                "Width (cm)": w_cm,
-                "Height (cm)": h_cm,
                 "Defect": "Yes" if r.get("defect_detected") else "No",
                 "Defect Type": (r.get("defect_type") or "").replace("_", " ").title() or "None",
             })

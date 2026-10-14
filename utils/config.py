@@ -37,7 +37,7 @@ else:
     DATABASE_PATH = DATA_DIR / "inspection.db"
 
 # Create directories
-for d in [UPLOAD_DIR, OUTPUT_DIR, EVIDENCE_DIR, CALIBRATION_DIR, DEMO_DIR, MODELS_DIR, LOGS_DIR]:
+for d in [UPLOAD_DIR, OUTPUT_DIR, EVIDENCE_DIR, DEMO_DIR, MODELS_DIR, LOGS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # ─── Application Settings ────────────────────────────────────────
@@ -105,56 +105,21 @@ OCR_CONFIG = {
     },
 }
 
-# ─── Calibration ─────────────────────────────────────────────────
-CALIBRATION_CONFIG = {
-    "validity_days": 30,
-    "checkerboard_size": (9, 6),
-    "square_size_mm": 25.0,
-    "min_calibration_images": 5,
-    "reprojection_error_threshold": 1.0,
-}
-
-# ─── Measurement ─────────────────────────────────────────────────
-MEASUREMENT_CONFIG = {
-    "accuracy_target_percent": 1.0,
-    "min_confidence_for_pass": 0.7,
-    "units": ["mm", "cm", "m"],
-    "default_unit": "mm",
-}
-
 # ─── Default Billet Profiles ─────────────────────────────────────
 DEFAULT_BILLET_PROFILES = {
     "ISI Standard 750x150x150mm": {
-        "nominal_length_mm": 750.0,
-        "nominal_width_mm": 150.0,
-        "nominal_height_mm": 150.0,
-        "length_tolerance_mm": 7.5,
-        "width_tolerance_mm": 3.0,
-        "height_tolerance_mm": 3.0,
         "cross_section": "square",
         "defect_rule": "FAIL",
         "required_fields": ["billet_id"],
         "description": "Standard square billet per ISI specification",
     },
     "ISI Standard 1000x200x200mm": {
-        "nominal_length_mm": 1000.0,
-        "nominal_width_mm": 200.0,
-        "nominal_height_mm": 200.0,
-        "length_tolerance_mm": 10.0,
-        "width_tolerance_mm": 4.0,
-        "height_tolerance_mm": 4.0,
         "cross_section": "square",
         "defect_rule": "FAIL",
         "required_fields": ["billet_id"],
         "description": "Large square billet per ISI specification",
     },
     "Custom Profile": {
-        "nominal_length_mm": 0.0,
-        "nominal_width_mm": 0.0,
-        "nominal_height_mm": 0.0,
-        "length_tolerance_mm": 0.0,
-        "width_tolerance_mm": 0.0,
-        "height_tolerance_mm": 0.0,
         "cross_section": "square",
         "defect_rule": "REVIEW",
         "required_fields": [],
@@ -178,14 +143,11 @@ ALERT_CONFIG = {
     "dedup_window_seconds": 10,
     "severity_levels": ["CRITICAL", "WARNING", "INFO"],
     "alert_types": [
-        "OUT_OF_TOLERANCE",
         "DEFECT_DETECTED",
         "ID_UNREADABLE",
         "DUPLICATE_ID",
-        "CALIBRATION_INVALID",
         "LOW_CONFIDENCE",
         "MODEL_UNAVAILABLE",
-        "DIMENSIONAL_DRIFT",
     ],
 }
 

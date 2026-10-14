@@ -1,6 +1,6 @@
 """
 Upload & Process Page — Video and Image Inspection Pipeline.
-Executes real-time billet detection, defect classification, physical dimensional measurement (cm/mm),
+Executes real-time billet detection, defect classification,
 OCR text & 2D DataMatrix/QR traceability extraction, and automated QC evaluation.
 """
 import streamlit as st
@@ -15,8 +15,6 @@ from datetime import datetime
 
 from vision.detection import VideoProcessor
 from defects.defect_detection import DefectDetector
-from measurement.calibration import CameraCalibrator, DimensionalMeasurer, dimensional_analysis
-from integrationsbyAbhi.dimensionsCamYOLO import check_length_and_width, draw_yolo_dimension_annotations
 from ocr_module.ocr_extraction import OCREngine
 from rules.decision_engine import DecisionEngine
 from storage.database import get_database
@@ -30,7 +28,7 @@ from utils.logger import logger
 def render_upload_process():
     st.markdown('<div class="page-title">📹 Inspection &amp; Traceability Processing</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="page-subtitle">Upload factory video or still frames for real-time dimensioning in cm, defect QC, and Heat/Billet ID capture</div>',
+        '<div class="page-subtitle">Upload factory video or still frames for real-time defect QC and Heat/Billet ID capture</div>',
         unsafe_allow_html=True,
     )
 
@@ -49,25 +47,19 @@ def render_upload_process():
     db = get_database()
 
     # Initialize session state services
-    if "calibrator" not in st.session_state:
-        st.session_state.calibrator = CameraCalibrator()
     if "video_processor" not in st.session_state:
-        st.session_state.video_processor = VideoProcessor(calibrator=st.session_state.calibrator)
+        st.session_state.video_processor = VideoProcessor()
     if "defect_detector" not in st.session_state:
         st.session_state.defect_detector = DefectDetector()
     if "ocr_engine" not in st.session_state:
         st.session_state.ocr_engine = OCREngine()
     if "decision_engine" not in st.session_state:
         st.session_state.decision_engine = DecisionEngine()
-    if "measurer" not in st.session_state:
-        st.session_state.measurer = DimensionalMeasurer(st.session_state.calibrator)
 
     vp: VideoProcessor = st.session_state.video_processor
     dd: DefectDetector = st.session_state.defect_detector
-    cal: CameraCalibrator = st.session_state.calibrator
     ocr: OCREngine = st.session_state.ocr_engine
     de: DecisionEngine = st.session_state.decision_engine
-    meas: DimensionalMeasurer = st.session_state.measurer
 
     # ── Configuration & Traceability Setup ────────────────────────
     st.markdown("### ⚙️ Inspection Configuration & Batch Traceability")
@@ -130,7 +122,7 @@ def render_upload_process():
 
                 if st.button("▶️ Start Video Inspection", type="primary", use_container_width=True):
                     _process_video(
-                        tmp.name, vp, dd, cal, ocr, de, meas, db,
+                        tmp.name, vp, dd, ocr, de, db,
                         profile, profile_name, frame_skip, conf_threshold,
                         plant_info, shift_info, default_billet_prefix, default_heat_num,
                     )
@@ -194,7 +186,7 @@ def render_upload_process():
 
             if run_full_qc:
                 _process_single_image(
-                    image, img_filename, vp, dd, cal, ocr, de, meas, db,
+                    image, img_filename, vp, dd, ocr, de, db,
                     profile, profile_name, plant_info, shift_info,
                     default_billet_prefix, default_heat_num,
                     is_demo=(img_source != "Upload File"),
@@ -243,7 +235,7 @@ def render_upload_process():
                 st.markdown("---")
                 st.markdown("#### 📸 Running QC Inspection on Captured Live Frame")
                 _process_single_image(
-                    st.session_state.last_live_frame, "live_camera_capture.jpg", vp, dd, cal, ocr, de, meas, db,
+                    st.session_state.last_live_frame, "live_camera_capture.jpg", vp, dd, ocr, de, db,
                     profile, profile_name, plant_info, shift_info,
                     default_billet_prefix, default_heat_num,
                 )
@@ -339,7 +331,7 @@ def render_upload_process():
 
                     if st.button("🔍 Run Full Billet QC Inspection on Snapshot", type="primary", use_container_width=True, key="snap_qc_btn"):
                         _process_single_image(
-                            frame, "camera_snapshot.jpg", vp, dd, cal, ocr, de, meas, db,
+                            frame, "camera_snapshot.jpg", vp, dd, ocr, de, db,
                             profile, profile_name, plant_info, shift_info,
                             default_billet_prefix, default_heat_num,
                         )
@@ -349,11 +341,11 @@ def render_upload_process():
         dcol1, dcol2 = st.columns(2)
         with dcol1:
             st.markdown("##### 🖼️ Synthetic Image QC")
-            st.caption("Inspects a simulated billet with surface crack, Billet ID, Heat Number, and dimensional scale.")
+            st.caption("Inspects a simulated billet with surface crack, Billet ID, and Heat Number.")
             if st.button("▶️ Run Synthetic Image Inspection", use_container_width=True, type="primary"):
                 demo_frame = _create_demo_frame()
                 _process_single_image(
-                    demo_frame, "demo_synthetic.jpg", vp, dd, cal, ocr, de, meas, db,
+                    demo_frame, "demo_synthetic.jpg", vp, dd, ocr, de, db,
                     profile, profile_name, plant_info, shift_info,
                     default_billet_prefix, default_heat_num, is_demo=True,
                 )
@@ -365,7 +357,7 @@ def render_upload_process():
                 st.caption("Runs automated tracking across a 120-frame simulated conveyor with continuous traceability.")
                 if st.button("▶️ Run Demo Conveyor Video", use_container_width=True):
                     _process_video(
-                        demo_vid_path, vp, dd, cal, ocr, de, meas, db,
+                        demo_vid_path, vp, dd, ocr, de, db,
                         profile, profile_name, frame_skip, conf_threshold,
                         plant_info, shift_info, default_billet_prefix, default_heat_num,
                     )
@@ -382,7 +374,7 @@ def render_upload_process():
 # ─── Video processing ────────────────────────────────────────────
 
 def _process_video(
-    video_path, vp, dd, cal, ocr, de, meas, db,
+    video_path, vp, dd, ocr, de, db,
     profile, profile_name, frame_skip, conf_threshold,
     plant_info, shift_info, default_billet_prefix, default_heat_num,
 ):
@@ -406,8 +398,6 @@ def _process_video(
     frame_idx = 0
     start_time = time.time()
 
-    cal_valid = cal.calibration is not None and cal.calibration.is_valid
-    
     # We'll use a specific batch ID to identify this video's run
     video_batch_id = f"VID-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
@@ -450,15 +440,10 @@ def _process_video(
                 default_heat_number=default_heat_num,
             )
 
-            # Dimensional measurements via integrationsbyAbhi/dimensionsCamYOLO.py
-            measurements = meas.measure_from_bbox(det.bbox, profile, image=frame)
-
-            # QC Decision
+            # QC Decision based on defects and OCR traceability
             decision = de.evaluate(
-                measurements=measurements,
                 defects=defects,
                 ocr_result=ocr_result,
-                calibration_valid=cal_valid,
                 profile=profile,
             )
 
@@ -467,7 +452,7 @@ def _process_video(
 
             # Database record
             record = _build_record(
-                det, defects, ocr_result, measurements, decision,
+                det, defects, ocr_result, decision,
                 evidence_path, video_path, frame_idx, timestamp,
                 profile_name, plant_info, shift_info, is_demo=False,
             )
@@ -478,7 +463,7 @@ def _process_video(
                 record_id = db.insert_inspection(record)
                 billet_records[track_id] = {"record_id": record_id, "frames_seen": 1}
                 video_records_list.append(record)
-                _generate_alerts(db, record, decision, det, defects, ocr_result, cal_valid)
+                _generate_alerts(db, record, decision, det, defects, ocr_result)
             else:
                 # Update record if needed or just keep track
                 pass
@@ -539,15 +524,13 @@ def _process_video(
 # ─── Single image processing ─────────────────────────────────────
 
 def _process_single_image(
-    image, filename, vp, dd, cal, ocr, de, meas, db,
+    image, filename, vp, dd, ocr, de, db,
     profile, profile_name, plant_info, shift_info,
     default_billet_prefix="BLT-2024", default_heat_num="HT-88215",
     is_demo=False,
 ):
-    """Process a single image with comprehensive CM dimensioning and dual ID capture."""
-    with st.spinner("🔍 Evaluating billet dimensions, defects, and markings..."):
-        cal_valid = cal.calibration is not None and cal.calibration.is_valid
-
+    """Process a single image for defect QC and traceability ID capture."""
+    with st.spinner("🔍 Evaluating billet defects and markings..."):
         # Detect billet ROI
         result = vp.process_frame(image, 0, 0.0)
 
@@ -572,14 +555,9 @@ def _process_single_image(
                 default_heat_number=default_heat_num,
             )
 
-            # Dimensional measurements via integrationsbyAbhi/dimensionsCamYOLO.py
-            measurements = meas.measure_from_bbox(det.bbox, profile, image=image)
-
             decision = de.evaluate(
-                measurements=measurements,
                 defects=defects,
                 ocr_result=ocr_result,
-                calibration_valid=cal_valid,
                 profile=profile,
             )
 
@@ -606,17 +584,6 @@ def _process_single_image(
             if ocr_result.detections:
                 annotated = ocr.draw_ocr_annotations(annotated, ocr_result.detections, color=(0, 255, 0))
 
-            # Draw Dimensional Analysis target lock box & crosshair (matching integrationsbyAbhi/dimensionsCamYOLO.py)
-            dim_chk = check_length_and_width(image=image, bbox=det.bbox, profile=profile)
-            if dim_chk.get("locked_box") is not None:
-                l_cm = measurements["length"].physical_value_cm if "length" in measurements else None
-                w_cm = measurements["width"].physical_value_cm if "width" in measurements else None
-                annotated = draw_yolo_dimension_annotations(
-                    annotated, dim_chk["locked_box"],
-                    length_cm=l_cm, width_cm=w_cm,
-                    is_pass=(decision.status == "PASS"),
-                )
-
             # Label on image
             b_label = ocr_result.billet_id or det.track_id
             cv2.putText(annotated, f"{b_label} | {decision.status}", (x1, y1 - 10),
@@ -631,7 +598,7 @@ def _process_single_image(
                 pass_label = "PASS - QC SUSPENDED (TESTING)" if is_qc_suspended() else "PASS - READY FOR DISPATCH"
                 badge_map = {
                     "PASS": (pass_label, "badge-pass"),
-                    "FAIL": ("REJECT - OUT OF SPEC", "badge-fail"),
+                    "FAIL": ("REJECT - DEFECT DETECTED", "badge-fail"),
                     "REVIEW_REQUIRED": ("FLAGGED FOR MANUAL REVIEW", "badge-review"),
                     "REWORK": ("REWORK REQUIRED", "badge-rework"),
                     "UNVERIFIED": ("SPEC UNVERIFIED", "badge-unverified"),
@@ -665,46 +632,6 @@ def _process_single_image(
                         for i, d in enumerate(ocr_result.detections, 1):
                             st.write(f"- Block {i}: **{d['text']}** (`{d['confidence']:.0%}`)")
 
-                # Dimensional measurements in centimeters
-                st.markdown("##### 📏 Physical Dimensions (cm)")
-                l_m = measurements.get("length")
-                w_m = measurements.get("width")
-                h_m = measurements.get("height")
-
-                l_cm = f"{l_m.physical_value_cm:.1f} cm" if (l_m and l_m.physical_value_cm) else "—"
-                w_cm = f"{w_m.physical_value_cm:.1f} cm" if (w_m and w_m.physical_value_cm) else "—"
-                h_cm = f"{h_m.physical_value_cm:.1f} cm" if (h_m and h_m.physical_value_cm) else "—"
-                full_dim_cm = f"{l_cm} x {w_cm} x {h_cm}" if (l_m and w_m) else "—"
-
-                st.markdown(f"""
-                <div style="background:#EFF6FF; border:1px solid #BFDBFE; border-radius:6px; padding:10px 14px; margin-bottom:10px;">
-                    <div style="font-size:0.72rem; color:#1E40AF; font-weight:700; text-transform:uppercase;">Full Dimensions (Length x Width x Height)</div>
-                    <div style="font-size:1.22rem; font-weight:700; color:#0F172A; font-family:'JetBrains Mono',monospace; margin-top:2px;">
-                        {full_dim_cm}
-                    </div>
-                    <div style="font-size:0.7rem; color:#475569; margin-top:4px;">
-                        📐 Length &amp; Width verified via <b>integrationsbyAbhi/dimensionsCamYOLO.py</b> (YOLO Center-Lock &amp; EMA)
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                dim_c1, dim_c2, dim_c3 = st.columns(3)
-                dim_c1.metric(
-                    "Length (cm)", l_cm,
-                    delta=f"{l_m.deviation_cm:+.1f} cm" if (l_m and l_m.deviation_cm) else None,
-                    delta_color="inverse" if (l_m and not l_m.is_within_tolerance) else "normal"
-                )
-                dim_c2.metric(
-                    "Width (cm)", w_cm,
-                    delta=f"{w_m.deviation_cm:+.1f} cm" if (w_m and w_m.deviation_cm) else None,
-                    delta_color="inverse" if (w_m and not w_m.is_within_tolerance) else "normal"
-                )
-                dim_c3.metric(
-                    "Height (cm)", h_cm,
-                    delta=f"{h_m.deviation_cm:+.1f} cm" if (h_m and h_m.deviation_cm) else None,
-                    delta_color="inverse" if (h_m and not h_m.is_within_tolerance) else "normal"
-                )
-
                 # Defects
                 st.markdown("##### ⚠️ Surface Defect Inspection")
                 if defects:
@@ -720,12 +647,12 @@ def _process_single_image(
 
             # Record in SQLite database
             record = _build_record(
-                det, defects, ocr_result, measurements, decision,
+                det, defects, ocr_result, decision,
                 evidence_path, filename, 0, 0.0,
                 profile_name, plant_info, shift_info, is_demo,
             )
             rec_id = db.insert_inspection(record)
-            _generate_alerts(db, record, decision, det, defects, ocr_result, cal_valid)
+            _generate_alerts(db, record, decision, det, defects, ocr_result)
 
             # Instant Excel Export for this inspection
             st.markdown("---")
@@ -750,15 +677,11 @@ def _process_single_image(
 # ─── Helpers ──────────────────────────────────────────────────────
 
 def _build_record(
-    det, defects, ocr_result, measurements, decision,
+    det, defects, ocr_result, decision,
     evidence_path, source_file, frame_number, timestamp,
     profile_name, plant_info, shift_info, is_demo,
 ):
     """Build a complete database record dict from inspection results."""
-    length_m = measurements.get("length")
-    width_m = measurements.get("width")
-    height_m = measurements.get("height")
-
     # Ensure billet_id is cleanly populated
     billet_num = ocr_result.billet_id if ocr_result.is_readable else "ID_UNREADABLE"
     heat_num = ocr_result.heat_number or None
@@ -778,19 +701,16 @@ def _build_record(
         "raw_ocr_text": ocr_result.raw_text or None,
         "ocr_confidence": ocr_result.confidence or 0.0,
         "qr_barcode_result": ocr_result.qr_data or ocr_result.barcode_data or None,
-        "measured_length_mm": length_m.physical_value_mm if length_m else None,
-        "measured_width_mm": width_m.physical_value_mm if width_m else None,
-        "measured_height_mm": height_m.physical_value_mm if height_m else None,
-        "nominal_length_mm": length_m.nominal_value_mm if length_m else None,
-        "nominal_width_mm": width_m.nominal_value_mm if width_m else None,
-        "nominal_height_mm": height_m.nominal_value_mm if height_m else None,
-        "length_tolerance_mm": (length_m.max_allowed_mm - length_m.nominal_value_mm)
-            if length_m and length_m.nominal_value_mm and length_m.max_allowed_mm else None,
-        "width_tolerance_mm": (width_m.max_allowed_mm - width_m.nominal_value_mm)
-            if width_m and width_m.nominal_value_mm and width_m.max_allowed_mm else None,
-        "height_tolerance_mm": (height_m.max_allowed_mm - height_m.nominal_value_mm)
-            if height_m and height_m.nominal_value_mm and height_m.max_allowed_mm else None,
-        "calibration_status": decision.calibration_status,
+        "measured_length_mm": None,
+        "measured_width_mm": None,
+        "measured_height_mm": None,
+        "nominal_length_mm": None,
+        "nominal_width_mm": None,
+        "nominal_height_mm": None,
+        "length_tolerance_mm": None,
+        "width_tolerance_mm": None,
+        "height_tolerance_mm": None,
+        "calibration_status": "NOT_APPLICABLE",
         "measurement_confidence": decision.overall_confidence,
         "defect_detected": 1 if defects else 0,
         "defect_type": defects[0].defect_type if defects else None,
@@ -807,7 +727,7 @@ def _build_record(
     }
 
 
-def _generate_alerts(db, record, decision, det, defects, ocr_result, cal_valid):
+def _generate_alerts(db, record, decision, det, defects, ocr_result):
     """Generate alerts for notable conditions."""
     base = {
         "record_id": record["record_id"],
@@ -819,7 +739,7 @@ def _generate_alerts(db, record, decision, det, defects, ocr_result, cal_valid):
         for rule in decision.failed_rules:
             db.insert_alert({
                 **base,
-                "alert_type": "OUT_OF_TOLERANCE" if "tolerance" in rule.lower() else "DEFECT_DETECTED",
+                "alert_type": "DEFECT_DETECTED",
                 "severity": "CRITICAL",
                 "message": rule,
                 "reason": rule,
@@ -858,24 +778,13 @@ def _show_results_summary(db, billet_records):
     for track_id, info in billet_records.items():
         record = db.get_inspection(info["record_id"])
         if record:
-            l_mm = record.get("measured_length_mm")
-            w_mm = record.get("measured_width_mm")
-            h_mm = record.get("measured_height_mm")
-            l_cm = f"{l_mm/10.0:.1f} cm" if l_mm is not None else "—"
-            w_cm = f"{w_mm/10.0:.1f} cm" if w_mm is not None else "—"
-            h_cm = f"{h_mm/10.0:.1f} cm" if h_mm is not None else "—"
-            dim_str = f"{l_cm} x {w_cm} x {h_cm}" if (l_mm and w_mm) else "—"
-
             rows.append({
                 "Track ID": track_id,
                 "Billet Number": record.get("billet_id", "—"),
                 "Heat Number": record.get("heat_number", "—"),
                 "Status": record.get("inspection_status", "—"),
-                "Dimensions (cm)": dim_str,
-                "Length (cm)": l_cm,
-                "Width (cm)": w_cm,
-                "Height (cm)": h_cm,
                 "Defect": record.get("defect_type") or ("None" if not record.get("defect_detected") else "Yes"),
+                "Defect Count": record.get("defect_count", 0),
                 "Frames": info["frames_seen"],
             })
 
@@ -966,11 +875,6 @@ def _create_demo_frame():
 
     # Simulated surface anomaly (defect)
     cv2.ellipse(frame, (450, 360), (32, 14), 25, 0, 360, (40, 35, 30), -1)
-
-    # Scale reference bar (200px = 20.0 cm)
-    cv2.line(frame, (200, 520), (400, 520), (220, 220, 220), 2)
-    cv2.putText(frame, "200px (20.0 cm Reference Scale)", (220, 550),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.65, (220, 220, 220), 1)
 
     # Factory banner
     cv2.putText(frame, "SMS-1 / CASTER-A &bull; DEMO INSPECTION", (20, 35),

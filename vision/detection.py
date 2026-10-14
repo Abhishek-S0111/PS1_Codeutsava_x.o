@@ -291,10 +291,9 @@ class SimpleTracker:
 class VideoProcessor:
     """Processes uploaded videos frame by frame."""
     
-    def __init__(self, detector: BilletDetector = None, tracker: SimpleTracker = None, calibrator = None):
+    def __init__(self, detector: BilletDetector = None, tracker: SimpleTracker = None):
         self.detector = detector or BilletDetector()
         self.tracker = tracker or SimpleTracker()
-        self.calibrator = calibrator
         self.is_processing = False
         self.current_frame = 0
         self.total_frames = 0
@@ -368,10 +367,6 @@ class VideoProcessor:
         
         cv2.rectangle(frame, (x1, y1 - th - 10), (x1 + tw + 10, y1), color, -1)
         cv2.putText(frame, label, (x1 + 5, y1 - 5), font, font_scale, (0, 0, 0), 1)
-        
-        # Dimensions in pixels
-        dim_label = f"{det.width}x{det.height}px"
-        cv2.putText(frame, dim_label, (x1, y2 + 20), font, 0.5, (200, 200, 200), 1)
         
         return frame
     

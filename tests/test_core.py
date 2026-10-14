@@ -175,249 +175,13 @@ class TestDatabase:
         os.remove(path)
 
 
-# ── Calibration Tests ─────────────────────────────────────────────
-
-class TestCalibration:
-    def test_manual_calibration(self):
-        from measurement.calibration import CameraCalibrator
-        cal = CameraCalibrator()
-        data = cal.calibrate_manual(5.0)
-        assert data.pixels_per_mm == 5.0
-        assert data.is_valid
-
-    def test_pixels_to_mm(self):
-        from measurement.calibration import CameraCalibrator
-        cal = CameraCalibrator()
-        cal.calibrate_manual(10.0)
-        assert cal.pixels_to_mm(100) == approx(10.0)
-        assert cal.pixels_to_mm(50) == approx(5.0)
-
-    def test_uncalibrated_returns_none(self):
-        from measurement.calibration import CameraCalibrator
-        cal = CameraCalibrator()
-        cal.calibration = None
-        assert cal.pixels_to_mm(100) is None
-
-    def test_reference_calibration(self):
-        from measurement.calibration import CameraCalibrator
-        cal = CameraCalibrator()
-        img = np.zeros((500, 500, 3), dtype=np.uint8)
-        data = cal.calibrate_with_reference(img, ((0, 0), (200, 0)), 100.0)
-        assert data.pixels_per_mm == approx(2.0)
-
-
-# ── Measurement Tests ─────────────────────────────────────────────
-
-class TestMeasurement:
-    def test_within_tolerance(self):
-        from measurement.calibration import CameraCalibrator, DimensionalMeasurer
-        cal = CameraCalibrator()
-        cal.calibrate_manual(1.0)  # 1 px = 1 mm
-        meas = DimensionalMeasurer(cal)
-        profile = {
-            "nominal_length_mm": 750.0,
-            "nominal_width_mm": 150.0,
-            "nominal_height_mm": 150.0,
-            "length_tolerance_mm": 7.5,
-            "width_tolerance_mm": 3.0,
-            "height_tolerance_mm": 3.0,
-        }
-        results = meas.measure_from_bbox((0, 0, 150, 750), profile)
-        assert results["width"].physical_value_mm == approx(150.0)
-        assert results["width"].is_within_tolerance
-
-    def test_out_of_tolerance(self):
-        from measurement.calibration import CameraCalibrator, DimensionalMeasurer
-        cal = CameraCalibrator()
-        cal.calibrate_manual(1.0)
-        meas = DimensionalMeasurer(cal)
-        profile = {
-            "nominal_width_mm": 150.0,
-            "width_tolerance_mm": 3.0,
-            "nominal_height_mm": 150.0,
-            "height_tolerance_mm": 3.0,
-            "nominal_length_mm": 750.0,
-            "length_tolerance_mm": 7.5,
-        }
-        # Width = 200px = 200mm, far outside 150±3
-        results = meas.measure_from_bbox((0, 0, 200, 750), profile)
-        assert not results["width"].is_within_tolerance
-
-    def test_missing_calibration_prevents_pass(self):
-        from measurement.calibration import CameraCalibrator, DimensionalMeasurer
-        cal = CameraCalibrator()
-        cal.calibration = None
-        meas = DimensionalMeasurer(cal)
-        profile = {"nominal_width_mm": 150.0, "width_tolerance_mm": 3.0}
-        results = meas.measure_from_bbox((0, 0, 150, 150), profile)
-        assert results["width"].status == "NOT_MEASURABLE"
-
-    def test_dimensions_cams2_focal_length_and_real_dimension(self):
-        from integrationsbyAbhi.dimensionsCams2 import calculate_focal_length, calculate_real_width, calculate_real_length
-        # 85.6 mm credit card at 300 mm measuring 250 px
-        fl = calculate_focal_length(250.0, 85.6, 300.0)
-        assert fl == approx((250.0 * 300.0) / 85.6)
-        
-        # Real width of 250 px should recover 85.6 mm
-        real_w = calculate_real_width(250.0, 300.0, fl)
-        assert real_w == approx(85.6)
-
-        # Real length of 500 px corrected for 10x factor (171.2 / 10 = 17.12 mm)
-        real_l = calculate_real_length(500.0, 300.0, fl)
-        assert real_l == approx(17.12)
-
-    def test_dimensions_cams2_find_largest_object(self):
-        import cv2
-        from integrationsbyAbhi.dimensionsCams2 import find_largest_object
-        img = np.zeros((400, 600, 3), dtype=np.uint8)
-        # Draw a white rectangle simulating a billet
-        cv2.rectangle(img, (100, 100), (500, 250), (255, 255, 255), -1)
-        marker = find_largest_object(img)
-        assert marker is not None
-        center, dims, angle = marker
-        max_dim = max(dims)
-        min_dim = min(dims)
-        # Width: 400px, Height: 150px
-        assert max_dim == approx(400.0, abs=5.0)
-        assert min_dim == approx(150.0, abs=5.0)
-
-    def test_dimensional_analysis_function_with_dimensions_cam_yolo(self):
-        import cv2
-        from measurement.calibration import CameraCalibrator, dimensional_analysis
-        cal = CameraCalibrator()
-        cal.calibrate_manual(2.0)  # 2 px/mm -> 1 mm = 2 px
-
-        img = np.zeros((600, 1200, 3), dtype=np.uint8)
-        # Draw billet 750mm x 150mm -> 1500px x 300px (scaled to 750px x 150px)
-        cv2.rectangle(img, (100, 100), (850, 250), (255, 255, 255), -1)
-
-        profile = {
-            "nominal_length_mm": 375.0,
-            "nominal_width_mm": 75.0,
-            "length_tolerance_mm": 10.0,
-            "width_tolerance_mm": 5.0,
-        }
-
-        results = dimensional_analysis(image=img, profile=profile, calibrator=cal)
-        assert "length" in results
-        assert "width" in results
-        assert results["length"].status == "VALID"
-        assert results["width"].status == "VALID"
-        assert results["length"].is_within_tolerance
-        assert results["width"].is_within_tolerance
-
-    def test_pinhole_calibration_and_checks(self):
-        from measurement.calibration import CameraCalibrator, DimensionalMeasurer
-        cal = CameraCalibrator()
-        # Calibrate using pinhole phone model (75.0 mm at 300 mm = 250 px)
-        cal_data = cal.calibrate_pinhole(250.0, 75.0, 300.0)
-        assert cal_data.focal_length > 0
-        assert cal_data.is_valid
-
-        meas = DimensionalMeasurer(cal)
-        profile = {
-            "nominal_width_mm": 75.0,
-            "width_tolerance_mm": 2.0,
-            "nominal_length_mm": 150.0,
-            "length_tolerance_mm": 5.0,
-        }
-        # A bbox of 250px by 500px corresponds to 75.0mm width and 15.0mm length (0.1x corrected)
-        results = meas.measure_from_bbox((0, 0, 250, 500), profile)
-        assert results["width"].physical_value_mm == approx(75.0)
-        assert results["length"].physical_value_mm == approx(15.0)
-        assert results["width"].is_within_tolerance
-        assert results["length"].is_within_tolerance
-
-
-# ── DimensionsCamYOLO Tests ───────────────────────────────────────
-
-class TestDimensionsCamYOLO:
-    """Test integrationsbyAbhi/dimensionsCamYOLO.py directly."""
-
-    def test_focal_length_and_real_measurements(self):
-        from integrationsbyAbhi.dimensionsCamYOLO import (
-            calculate_focal_length,
-            calculate_real_width,
-            calculate_real_length,
-        )
-        # F = (250 * 300) / 75 = 1000 px
-        fl = calculate_focal_length(250.0, 75.0, 300.0)
-        assert fl == approx(1000.0)
-
-        # W = (250 * 300) / 1000 = 75 mm
-        real_w = calculate_real_width(250.0, 300.0, fl)
-        assert real_w == approx(75.0)
-
-        # L = (2500 * 300) / 1000 = 750 mm -> divided by 10 = 75.0 mm (0.1x adjustment)
-        real_l = calculate_real_length(2500.0, 300.0, fl)
-        assert real_l == approx(75.0)
-
-    def test_ema_temporal_smoothing(self):
-        from integrationsbyAbhi.dimensionsCamYOLO import apply_ema
-        # Initial reading with no prior history
-        s0 = apply_ema(100.0, None, smoothing_factor=0.15)
-        assert s0 == approx(100.0)
-
-        # Next reading with jitter: S_1 = 0.15 * 200 + 0.85 * 100 = 30 + 85 = 115.0
-        s1 = apply_ema(200.0, s0, smoothing_factor=0.15)
-        assert s1 == approx(115.0)
-
-    def test_check_length_and_width_pinhole(self):
-        from integrationsbyAbhi.dimensionsCamYOLO import check_length_and_width
-        profile = {
-            "nominal_width_mm": 75.0,
-            "width_tolerance_mm": 5.0,
-            "nominal_length_mm": 75.0,
-            "length_tolerance_mm": 5.0,
-        }
-        res = check_length_and_width(
-            bbox=(0, 0, 2500, 250),
-            profile=profile,
-            focal_length=1000.0,
-            known_distance_mm=300.0,
-            use_yolo_detect=False,
-        )
-        assert res["pass_status"] == "PASS"
-        assert res["physical_width_mm"] == approx(75.0)
-        assert res["physical_length_mm"] == approx(75.0)
-        assert res["physical_width_cm"] == approx(7.5)
-        assert res["physical_length_cm"] == approx(7.5)
-
-    def test_draw_yolo_annotations(self):
-        import cv2
-        from integrationsbyAbhi.dimensionsCamYOLO import draw_yolo_dimension_annotations
-        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        annotated = draw_yolo_dimension_annotations(
-            frame,
-            bbox=(100, 100, 300, 200),
-            length_cm=20.0,
-            width_cm=10.0,
-            is_pass=True,
-            draw_crosshair=True,
-        )
-        assert annotated is not None
-        assert annotated.shape == frame.shape
-        # Ensure center crosshair and box were drawn
-        assert not np.array_equal(annotated, frame)
-
-
-
 # ── Decision Engine Tests ─────────────────────────────────────────
 
 class TestDecisionEngine:
     def test_pass_decision(self):
         from rules.decision_engine import DecisionEngine
-        from measurement.calibration import MeasurementResult
         de = DecisionEngine()
-        meas = {
-            "width": MeasurementResult(
-                dimension_name="width", pixel_value=150,
-                physical_value_mm=150.0, nominal_value_mm=150.0,
-                min_allowed_mm=147.0, max_allowed_mm=153.0,
-                status="VALID", calibration_valid=True, confidence=0.9,
-            ),
-        }
-        decision = de.evaluate(measurements=meas, defects=[], calibration_valid=True, profile={})
+        decision = de.evaluate(defects=[], profile={})
         assert decision.status == "PASS"
 
     def test_fail_on_defect(self):
@@ -425,21 +189,8 @@ class TestDecisionEngine:
         from defects.defect_detection import DefectDetection
         de = DecisionEngine()
         defects = [DefectDetection(bbox=(0, 0, 50, 50), confidence=0.9, defect_type="crack")]
-        decision = de.evaluate(defects=defects, calibration_valid=True, profile={"defect_rule": "FAIL"})
+        decision = de.evaluate(defects=defects, profile={"defect_rule": "FAIL"})
         assert decision.status == "FAIL"
-
-    def test_review_when_no_calibration(self):
-        from rules.decision_engine import DecisionEngine
-        from measurement.calibration import MeasurementResult
-        de = DecisionEngine()
-        meas = {
-            "width": MeasurementResult(
-                dimension_name="width", pixel_value=150,
-                status="NOT_MEASURABLE", calibration_valid=False,
-            ),
-        }
-        decision = de.evaluate(measurements=meas, calibration_valid=False, profile={})
-        assert decision.status in ("REVIEW_REQUIRED", "UNVERIFIED")
 
     def test_unverified_when_nothing_checked(self):
         from rules.decision_engine import DecisionEngine
@@ -449,29 +200,16 @@ class TestDecisionEngine:
 
     def test_suspend_qc_requirements_bypass_all_rejections(self):
         from rules.decision_engine import DecisionEngine
-        from measurement.calibration import MeasurementResult
         from defects.defect_detection import DefectDetection
         de = DecisionEngine()
 
-        # Measurement that is severely out of tolerance
-        meas = {
-            "width": MeasurementResult(
-                dimension_name="width", pixel_value=150,
-                physical_value_mm=190.0, nominal_value_mm=150.0,
-                min_allowed_mm=147.0, max_allowed_mm=153.0,
-                deviation_mm=40.0,
-                status="VALID", calibration_valid=False,
-            ),
-        }
         # Defect that would normally cause hard FAIL
         defects = [DefectDetection(bbox=(0, 0, 50, 50), confidence=0.95, defect_type="severe_crack")]
 
         # Evaluate with suspend_qc=True (Testing Mode)
         decision = de.evaluate(
-            measurements=meas,
             defects=defects,
             ocr_result=None,
-            calibration_valid=False,
             profile={"defect_rule": "FAIL"},
             suspend_qc=True,
         )
@@ -570,23 +308,7 @@ class TestOCR:
         assert annotated.shape == card.shape
         assert not np.array_equal(annotated, card)
 
-    def test_cm_dimension_calculations(self):
-        from measurement.calibration import MeasurementResult
-        m = MeasurementResult(
-            dimension_name="length",
-            pixel_value=6000.0,
-            physical_value_mm=6000.0,
-            nominal_value_mm=6000.0,
-            min_allowed_mm=5950.0,
-            max_allowed_mm=6050.0,
-            deviation_mm=0.0,
-            status="VALID",
-        )
-        assert m.physical_value_cm == approx(600.0)
-        assert m.nominal_value_cm == approx(600.0)
-        assert m.min_allowed_cm == approx(595.0)
-        assert m.max_allowed_cm == approx(605.0)
-        assert m.deviation_cm == approx(0.0)
+
 
 
 # ── Chatbot Tests ─────────────────────────────────────────────────

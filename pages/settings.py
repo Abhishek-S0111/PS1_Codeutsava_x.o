@@ -76,7 +76,7 @@ def render_settings():
 
     tab_qc, tab1, tab2, tab3, tab4 = st.tabs([
         "🧪 QC & Testing Mode",
-        "📏 Billet Profiles",
+        "📋 Inspection Profiles",
         "🧠 Model Configuration",
         "🔤 OCR Settings",
         "ℹ️ System Info",
@@ -95,10 +95,8 @@ def render_settings():
             st.markdown("#### ⚙️ Active Rejection Criteria Breakdown")
             st.markdown(f"""
             - **Current Status:** `{'⚠️ SUSPENDED (Testing Mode)' if toggle_val else '🛡️ ENFORCED (Production Mode)'}`
-            - **Dimensional Tolerances:** `{'Bypassed (Logged as Telemetry)' if toggle_val else 'Strictly Enforced (±3.0mm width / ±7.5mm length)'}`
             - **Defect Rejection Rule:** `{'Bypassed (Overlays Shown, No Reject)' if toggle_val else 'Enforced (FAIL / REWORK on crack/defect)'}`
             - **Traceability / Stencil OCR:** `{'Bypassed (Fallback ID allowed)' if toggle_val else 'Enforced (ID required for dispatch)'}`
-            - **Camera Calibration Requirement:** `{'Bypassed (Uncalibrated OK)' if toggle_val else 'Enforced (Calibration required for PASS)'}`
             """)
 
             action_btn_text = "🛡️ Switch to Production Mode (Enforce QC)" if toggle_val else "🧪 Switch to Testing Mode (Suspend QC)"
@@ -111,11 +109,9 @@ def render_settings():
             st.markdown("#### 📋 What happens when QC is suspended?")
             st.markdown("""
             1. **Real-time Telemetry Remains Intact**:
-               - YOLO bounding boxes and Center-Lock crosshairs are still drawn.
-               - Exponential Moving Average (EMA) smoothing and `0.1x` length scaling remain active.
-               - Real width, length, and height are still computed and displayed in centimeters and millimeters.
+               - YOLO bounding boxes and defect overlays are still drawn live.
+               - Stamped text and 2D QR traceability tags are actively decoded and displayed.
             2. **No Rejections During Testing**:
-               - Billets that are out of tolerance will **not** trigger a `FAIL` decision.
                - Detected surface defects are visualized with confidence percentages, but the billet retains `PASS`.
                - Missing or obscured OCR markings will not cause the pipeline to stall or demand manual review.
             3. **Database Records**:
@@ -123,43 +119,29 @@ def render_settings():
             """)
 
 
-    # ── Billet Profiles ───────────────────────────────────────────
+    # ── Inspection Profiles ───────────────────────────────────────
     with tab1:
         st.markdown("### Active Profiles")
         profiles = get_all_profiles()
 
         for name, profile in profiles.items():
-            with st.expander(f"📐 {name}", expanded=False):
+            with st.expander(f"📋 {name}", expanded=False):
                 pc1, pc2 = st.columns(2)
                 with pc1:
                     st.write(f"**Description:** {profile.get('description', '—')}")
                     st.write(f"**Cross-section:** {profile.get('cross_section', '—')}")
+                with pc2:
                     st.write(f"**Defect rule:** {profile.get('defect_rule', '—')}")
                     st.write(f"**Required fields:** {', '.join(profile.get('required_fields', []))}")
-                with pc2:
-                    nl = profile.get('nominal_length_mm', 0)
-                    nw = profile.get('nominal_width_mm', 0)
-                    nh = profile.get('nominal_height_mm', 0)
-                    st.write(f"**Nominal Length:** {nl} mm ({nl/10.0:.1f} cm)")
-                    st.write(f"**Nominal Width:** {nw} mm ({nw/10.0:.1f} cm)")
-                    st.write(f"**Nominal Height:** {nh} mm ({nh/10.0:.1f} cm)")
-                    st.write(f"**Length Tolerance:** ±{profile.get('length_tolerance_mm', 0)} mm (±{profile.get('length_tolerance_mm', 0)/10.0:.2f} cm)")
-                    st.write(f"**Width Tolerance:** ±{profile.get('width_tolerance_mm', 0)} mm (±{profile.get('width_tolerance_mm', 0)/10.0:.2f} cm)")
-                    st.write(f"**Height Tolerance:** ±{profile.get('height_tolerance_mm', 0)} mm (±{profile.get('height_tolerance_mm', 0)/10.0:.2f} cm)")
 
         st.markdown("---")
         st.markdown("### ➕ Create Custom Profile")
 
         cp1, cp2 = st.columns(2)
         with cp1:
-            new_name = st.text_input("Profile Name", placeholder="e.g. Custom Billet 800x160x160")
-            new_length = st.number_input("Nominal Length (mm)", 0.0, 5000.0, 750.0, 1.0)
-            new_width = st.number_input("Nominal Width (mm)", 0.0, 1000.0, 150.0, 1.0)
-            new_height = st.number_input("Nominal Height (mm)", 0.0, 1000.0, 150.0, 1.0)
+            new_name = st.text_input("Profile Name", placeholder="e.g. High-Tensile Steel Billet")
+            new_desc = st.text_input("Description", placeholder="e.g. Heavy bloom specification for structural rolling")
         with cp2:
-            new_ltol = st.number_input("Length Tolerance (mm)", 0.0, 100.0, 7.5, 0.5)
-            new_wtol = st.number_input("Width Tolerance (mm)", 0.0, 50.0, 3.0, 0.5)
-            new_htol = st.number_input("Height Tolerance (mm)", 0.0, 50.0, 3.0, 0.5)
             new_defect_rule = st.selectbox("Defect Rule", ["FAIL", "REWORK", "REVIEW"])
             new_cross = st.selectbox("Cross-section", ["square", "round", "rectangular"])
 
@@ -184,16 +166,10 @@ def render_settings():
                     config["billet_profiles"] = {}
 
                 config["billet_profiles"][new_name] = {
-                    "nominal_length_mm": new_length,
-                    "nominal_width_mm": new_width,
-                    "nominal_height_mm": new_height,
-                    "length_tolerance_mm": new_ltol,
-                    "width_tolerance_mm": new_wtol,
-                    "height_tolerance_mm": new_htol,
                     "cross_section": new_cross,
                     "defect_rule": new_defect_rule,
                     "required_fields": ["billet_id"],
-                    "description": f"Custom profile: {new_name}",
+                    "description": new_desc or f"Custom profile: {new_name}",
                 }
 
                 with open(config_path, "w") as f:

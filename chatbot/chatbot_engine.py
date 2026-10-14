@@ -99,13 +99,12 @@ Type **help** to see this list again."""
         if re.search(r"rework", text):
             return self._list_by_status("REWORK")
 
-        # Tolerance / measurement
-        if re.search(r"(out of tolerance|exceed|measurement|dimension)", text):
-            return self._out_of_tolerance()
-
-        # Drift
-        if re.search(r"(drift|trend|shift)", text):
-            return self._dimensional_drift()
+        # Tolerance / measurement / dimension / calibration queries
+        if re.search(r"(out of tolerance|exceed|measurement|dimension|drift|calibrate|calibration)", text):
+            return self._reply(
+                "ℹ️ **Notice:** Size calibration and dimensional analysis features have been completely removed from the system. "
+                "Inspections are evaluated purely on surface defect detection and OCR traceability."
+            )
 
         return self._reply(
             "I didn't understand that question. " + self.HELP_TEXT
@@ -159,10 +158,6 @@ Type **help** to see this list again."""
             "Status": record.get("inspection_status", "—"),
             "Raw OCR": record.get("raw_ocr_text") or "—",
             "QR/Barcode": record.get("qr_barcode_result") or "—",
-            "Length (mm)": record.get("measured_length_mm") or "—",
-            "Width (mm)": record.get("measured_width_mm") or "—",
-            "Height (mm)": record.get("measured_height_mm") or "—",
-            "Calibration": record.get("calibration_status", "—"),
             "Defect": "Yes" if record.get("defect_detected") else "No",
             "Defect Type": record.get("defect_type") or "—",
             "Defect Confidence": record.get("defect_confidence") or "—",

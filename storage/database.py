@@ -483,51 +483,30 @@ class InspectionDatabase:
     
     @staticmethod
     def _enrich_records_with_cm(records: List[Dict]) -> List[Dict]:
-        """Compute and add centimeter (cm) dimensional values to records."""
-        for r in records:
-            l_mm = r.get("measured_length_mm")
-            w_mm = r.get("measured_width_mm")
-            h_mm = r.get("measured_height_mm")
-            r["measured_length_cm"] = round(l_mm / 10.0, 2) if l_mm is not None else None
-            r["measured_width_cm"] = round(w_mm / 10.0, 2) if w_mm is not None else None
-            r["measured_height_cm"] = round(h_mm / 10.0, 2) if h_mm is not None else None
-            if l_mm and w_mm and h_mm:
-                r["dimensions_cm"] = f"{round(l_mm/10.0, 1)} x {round(w_mm/10.0, 1)} x {round(h_mm/10.0, 1)} cm"
-            elif l_mm and w_mm:
-                r["dimensions_cm"] = f"{round(l_mm/10.0, 1)} x {round(w_mm/10.0, 1)} cm"
-            else:
-                r["dimensions_cm"] = "—"
+        """No-op: dimensional analysis is removed."""
         return records
 
     def export_to_dataframe(self, **filters) -> Any:
-        """Export inspection records to a pandas DataFrame with cm dimensions and clear priority ordering."""
+        """Export inspection records to a pandas DataFrame with clear priority ordering."""
         if pd is None:
             raise RuntimeError("pandas is not installed. Install pandas or use get_inspections() / export_to_csv().")
         records = self.get_inspections(**filters)
-        self._enrich_records_with_cm(records)
         if not records:
             return pd.DataFrame()
 
         df = pd.DataFrame(records)
 
-        # Priority column mapping: Billet ID, Heat Number, and cm dimensions first
+        # Priority column mapping: Billet ID, Heat Number, defect status and traceability first
         priority_cols = [
             ("billet_id", "Billet Number"),
             ("heat_number", "Heat Number"),
             ("batch_number", "Batch Number"),
             ("inspection_status", "Inspection Status"),
-            ("dimensions_cm", "Dimensions (cm)"),
-            ("measured_length_cm", "Length (cm)"),
-            ("measured_width_cm", "Width (cm)"),
-            ("measured_height_cm", "Height (cm)"),
             ("defect_detected", "Defect Detected"),
             ("defect_type", "Defect Type"),
             ("defect_count", "Defect Count"),
-            ("measured_length_mm", "Length (mm)"),
-            ("measured_width_mm", "Width (mm)"),
-            ("measured_height_mm", "Height (mm)"),
             ("failed_rules", "Failed Rules"),
-            ("calibration_status", "Calibration Status"),
+            ("review_reason", "Review Reason"),
             ("ocr_confidence", "OCR Confidence"),
             ("timestamp", "Timestamp"),
             ("source_file", "Source File"),
